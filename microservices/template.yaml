@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Metis Microservices
+
+Globals:
+  Function:
+    Timeout: 900
+    Runtime: python3.9
+
+Resources:
+  LLMFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: llm/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          PYTHONPATH: ./
+          OPENAI_API_KEY: !Ref OpenAIApiKey
+    Metadata:
+      BuildMethod: python3.9
+
+  LLMFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !Ref LLMFunction
+      AuthType: NONE
+      Cors:
+        AllowCredentials: false
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - POST
+        AllowHeaders:
+          - Content-Type
+
+  LLMFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LLMFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'
+      FunctionUrlAuthType: NONE
+
+  ArXivFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: arxiv/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          PYTHONPATH: ./
+    Metadata:
+      BuildMethod: python3.9
+
+  ArXivFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !Ref ArXivFunction
+      AuthType: NONE
+      Cors:
+        AllowCredentials: false
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - POST
+        AllowHeaders:
+          - Content-Type
+
+  ArXivFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ArXivFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'
+      FunctionUrlAuthType: NONE
+
+Parameters:
+  OpenAIApiKey:
+    Type: String
+    Description: OpenAI API Key
+    NoEcho: true
+
+Outputs:
+  LLMFunctionUrl:
+    Description: "LLM Function URL"
+    Value: !GetAtt LLMFunctionUrl.FunctionUrl
+  ArXivFunctionUrl:
+    Description: "arXiv Function URL"
+    Value: !GetAtt ArXivFunctionUrl.FunctionUrl

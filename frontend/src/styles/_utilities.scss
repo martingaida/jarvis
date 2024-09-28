@@ -1,0 +1,86 @@
+// Flexbox utilities
+.d-flex { display: flex; }
+.flex-column { flex-direction: column; }
+.justify-content-center { justify-content: center; }
+.align-items-center { align-items: center; }
+.flex-grow-1 { flex-grow: 1; }
+
+// Spacing utilities
+@each $space in (0, 1, 2, 3, 4, 5) {
+  $value: $space * 0.25rem;
+  
+  .m-#{$space} { margin: $value; }
+  .mt-#{$space} { margin-top: $value; }
+  .mr-#{$space} { margin-right: $value; }
+  .mb-#{$space} { margin-bottom: $value; }
+  .ml-#{$space} { margin-left: $value; }
+  .mx-#{$space} { margin-left: $value; margin-right: $value; }
+  .my-#{$space} { margin-top: $value; margin-bottom: $value; }
+
+  .p-#{$space} { padding: $value; }
+  .pt-#{$space} { padding-top: $value; }
+  .pr-#{$space} { padding-right: $value; }
+  .pb-#{$space} { padding-bottom: $value; }
+  .pl-#{$space} { padding-left: $value; }
+  .px-#{$space} { padding-left: $value; padding-right: $value; }
+  .py-#{$space} { padding-top: $value; padding-bottom: $value; }
+}
+
+// Width utilities
+.w-100 { width: 100%; }
+.w-75 { width: 75%; }
+.w-50 { width: 50%; }
+.w-25 { width: 25%; }
+
+// Text alignment
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.text-right { text-align: right; }
+
+// Responsive utilities
+@mixin create-responsive-classes($breakpoint) {
+  @media (min-width: $breakpoint) {
+    .d-#{$breakpoint}-none { display: none; }
+    .d-#{$breakpoint}-flex { display: flex; }
+    .d-#{$breakpoint}-block { display: block; }
+    .flex-#{$breakpoint}-row { flex-direction: row; }
+    .flex-#{$breakpoint}-column { flex-direction: column; }
+    .justify-content-#{$breakpoint}-center { justify-content: center; }
+    .justify-content-#{$breakpoint}-between { justify-content: space-between; }
+    .justify-content-#{$breakpoint}-around { justify-content: space-around; }
+    .align-items-#{$breakpoint}-center { align-items: center; }
+    .text-#{$breakpoint}-center { text-align: center; }
+    .text-#{$breakpoint}-left { text-align: left; }
+    .text-#{$breakpoint}-right { text-align: right; }
+
+    @each $space in (0, 1, 2, 3, 4, 5) {
+      $value: $space * 0.25rem;
+      
+      .m-#{$breakpoint}-#{$space} { margin: $value; }
+      .mt-#{$breakpoint}-#{$space} { margin-top: $value; }
+      .mr-#{$breakpoint}-#{$space} { margin-right: $value; }
+      .mb-#{$breakpoint}-#{$space} { margin-bottom: $value; }
+      .ml-#{$breakpoint}-#{$space} { margin-left: $value; }
+      .mx-#{$breakpoint}-#{$space} { margin-left: $value; margin-right: $value; }
+      .my-#{$breakpoint}-#{$space} { margin-top: $value; margin-bottom: $value; }
+
+      .p-#{$breakpoint}-#{$space} { padding: $value; }
+      .pt-#{$breakpoint}-#{$space} { padding-top: $value; }
+      .pr-#{$breakpoint}-#{$space} { padding-right: $value; }
+      .pb-#{$breakpoint}-#{$space} { padding-bottom: $value; }
+      .pl-#{$breakpoint}-#{$space} { padding-left: $value; }
+      .px-#{$breakpoint}-#{$space} { padding-left: $value; padding-right: $value; }
+      .py-#{$breakpoint}-#{$space} { padding-top: $value; padding-bottom: $value; }
+    }
+
+    .w-#{$breakpoint}-100 { width: 100%; }
+    .w-#{$breakpoint}-75 { width: 75%; }
+    .w-#{$breakpoint}-50 { width: 50%; }
+    .w-#{$breakpoint}-25 { width: 25%; }
+  }
+}
+
+@include create-responsive-classes(sm);
+@include create-responsive-classes(md);
+@include create-responsive-classes(lg);
+@include create-responsive-classes(xl);

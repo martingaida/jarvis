@@ -1,0 +1,18 @@
+@import './styles/utilities';
+
+.no-margin {
+    margin: 0;
+}
+
+.mat-mdc-progress-bar {
+    --mdc-linear-progress-active-indicator-color: #000000 !important;
+    --mdc-linear-progress-track-color: #e0e0e0 !important;
+}
+
+body {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+}
+
+.bold {
+    font-weight: bold;
+}
