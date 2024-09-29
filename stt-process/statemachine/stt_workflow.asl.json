@@ -1,67 +1,67 @@
 {
-    "Comment": "Legal STT Workflow",
-    "StartAt": "ProcessAudioInput",
-    "States": {
-      "ProcessAudioInput": {
-        "Type": "Task",
-        "Resource": "${DataLambda}",
-        "Parameters": {
-          "audioUploadsBucket.$": "$.audioUploadsBucket",
-          "transcriptionOutputBucket.$": "$.transcriptionOutputBucket"
+  "Comment": "Legal STT Workflow",
+  "StartAt": "ProcessAudioInput",
+  "States": {
+    "ProcessAudioInput": {
+      "Type": "Task",
+      "Resource": "${DataLambdaArn}",
+      "Parameters": {
+        "audioUploadsBucket.$": "$.audioUploadsBucket",
+        "transcriptionOutputBucket.$": "$.transcriptionOutputBucket"
+      },
+      "Next": "PerformTranscription"
+    },
+    "PerformTranscription": {
+      "Type": "Task",
+      "Resource": "${TranscribeLambdaArn}",
+      "Next": "WaitForTranscription"
+    },
+    "WaitForTranscription": {
+      "Type": "Wait",
+      "Seconds": 30,
+      "Next": "CheckTranscriptionStatus"
+    },
+    "CheckTranscriptionStatus": {
+      "Type": "Task",
+      "Resource": "${TranscribeLambdaArn}",
+      "Next": "IsTranscriptionComplete"
+    },
+    "IsTranscriptionComplete": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.transcriptionJobStatus",
+          "StringEquals": "COMPLETED",
+          "Next": "EnhanceTranscript"
         },
-        "Next": "PerformTranscription"
+        {
+          "Variable": "$.transcriptionJobStatus",
+          "StringEquals": "FAILED",
+          "Next": "TranscriptionJobFailed"
+        }
+      ],
+      "Default": "WaitForTranscription"
+    },
+    "EnhanceTranscript": {
+      "Type": "Task",
+      "Resource": "${EnhanceLambdaArn}",
+      "Next": "StoreResults"
+    },
+    "StoreResults": {
+      "Type": "Task",
+      "Resource": "${StoreLambdaArn}",
+      "Parameters": {
+        "transcriptionOutputBucket.$": "$.transcriptionOutputBucket",
+        "enhancedTranscript.$": "$.enhancedTranscript",
+        "speakers.$": "$.speakers",
+        "transcriptionJobName.$": "$.transcriptionJobName"
       },
-      "PerformTranscription": {
-        "Type": "Task",
-        "Resource": "${TranscribeLambda}",
-        "Next": "WaitForTranscription"
-      },
-      "WaitForTranscription": {
-        "Type": "Wait",
-        "Seconds": 30,
-        "Next": "CheckTranscriptionStatus"
-      },
-      "CheckTranscriptionStatus": {
-        "Type": "Task",
-        "Resource": "${TranscribeLambda}",
-        "Next": "IsTranscriptionComplete"
-      },
-      "IsTranscriptionComplete": {
-        "Type": "Choice",
-        "Choices": [
-          {
-            "Variable": "$.transcriptionJobStatus",
-            "StringEquals": "COMPLETED",
-            "Next": "EnhanceTranscript"
-          },
-          {
-            "Variable": "$.transcriptionJobStatus",
-            "StringEquals": "FAILED",
-            "Next": "TranscriptionJobFailed"
-          }
-        ],
-        "Default": "WaitForTranscription"
-      },
-      "EnhanceTranscript": {
-        "Type": "Task",
-        "Resource": "${EnhanceLambda}",
-        "Next": "StoreResults"
-      },
-      "StoreResults": {
-        "Type": "Task",
-        "Resource": "${StoreLambda}",
-        "Parameters": {
-          "transcriptionOutputBucket.$": "$.transcriptionOutputBucket",
-          "enhancedTranscript.$": "$.enhancedTranscript",
-          "speakers.$": "$.speakers",
-          "transcriptionJobName.$": "$.transcriptionJobName"
-        },
-        "End": true
-      },
-      "TranscriptionJobFailed": {
-        "Type": "Fail",
-        "Cause": "AWS Transcribe job failed",
-        "Error": "TranscriptionJobFailedError"
-      }
+      "End": true
+    },
+    "TranscriptionJobFailed": {
+      "Type": "Fail",
+      "Cause": "AWS Transcribe job failed",
+      "Error": "TranscriptionJobFailedError"
     }
   }
+}

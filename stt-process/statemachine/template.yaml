@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Step Function Workflow Definition
+
+Parameters:
+  DataLambdaArn:
+    Type: String
+  TranscribeLambdaArn:
+    Type: String
+  EnhanceLambdaArn:
+    Type: String
+  StoreLambdaArn:
+    Type: String
+
+Resources:
+  TranscriptionWorkflowRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: Allow
+            Principal: 
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies: 
+        - PolicyName: StepFunctionsInvokeLambdas
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              - Effect: Allow
+                Action: 
+                  - lambda:InvokeFunction
+                Resource: 
+                  - !Ref DataLambdaArn
+                  - !Ref TranscribeLambdaArn
+                  - !Ref EnhanceLambdaArn
+                  - !Ref StoreLambdaArn
+
+  TranscriptionWorkflow:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      DefinitionString:
+        Fn::Sub: |
+          {
+            "Comment": "Legal STT Workflow",
+            "StartAt": "ProcessAudioInput",
+            "States": {
+              "ProcessAudioInput": {
+                "Type": "Task",
+                "Resource": "${DataLambdaArn}",
+                "Next": "PerformTranscription"
+              },
+              "PerformTranscription": {
+                "Type": "Task",
+                "Resource": "${TranscribeLambdaArn}",
+                "Next": "WaitForTranscription"
+              },
+              "WaitForTranscription": {
+                "Type": "Wait",
+                "Seconds": 30,
+                "Next": "CheckTranscriptionStatus"
+              },
+              "CheckTranscriptionStatus": {
+                "Type": "Task",
+                "Resource": "${TranscribeLambdaArn}",
+                "Next": "IsTranscriptionComplete"
+              },
+              "IsTranscriptionComplete": {
+                "Type": "Choice",
+                "Choices": [
+                  {
+                    "Variable": "$.transcriptionJobStatus",
+                    "StringEquals": "COMPLETED",
+                    "Next": "EnhanceTranscript"
+                  },
+                  {
+                    "Variable": "$.transcriptionJobStatus",
+                    "StringEquals": "FAILED",
+                    "Next": "TranscriptionJobFailed"
+                  }
+                ],
+                "Default": "WaitForTranscription"
+              },
+              "EnhanceTranscript": {
+                "Type": "Task",
+                "Resource": "${EnhanceLambdaArn}",
+                "Next": "StoreResults"
+              },
+              "StoreResults": {
+                "Type": "Task",
+                "Resource": "${StoreLambdaArn}",
+                "End": true
+              },
+              "TranscriptionJobFailed": {
+                "Type": "Fail",
+                "Cause": "AWS Transcribe job failed",
+                "Error": "TranscriptionJobFailedError"
+              }
+            }
+          }
+      RoleArn: !GetAtt TranscriptionWorkflowRole.Arn
+
+Outputs:
+  TranscriptionWorkflowArn:
+    Description: "ARN of the Step Functions State Machine"
+    Value: !GetAtt TranscriptionWorkflow.Arn
+    Export:
+      Name: TranscriptionWorkflowArn

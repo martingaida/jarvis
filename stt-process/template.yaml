@@ -1,8 +1,27 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Legal Audio STT Workflow
+Description: Legal Audio STT Workflow with Custom Resource to Resolve Circular Dependency
+
+Parameters:
+  OpenAIApiKey:
+    Type: String
+    NoEcho: true
+    Description: API Key for OpenAI integration
 
 Resources:
+  PythonLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: ja-stt-python-layer
+      Description: Python dependencies for STT Process Lambdas
+      ContentUri: layer/
+      CompatibleRuntimes:
+        - python3.9
+    Metadata:
+      BuildMethod: makefile
+      BuildProperties:
+        Makefile: layer/makefile
+
   AudioUploadsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -12,6 +31,10 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt StartLambda.Arn
 
   TranscriptionOutputBucket:
     Type: AWS::S3::Bucket
@@ -23,44 +46,29 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
 
-  AudioUploadsBucketPolicy:
-    Type: AWS::S3::BucketPolicy
+  StartLambda:
+    Type: AWS::Serverless::Function
     Properties:
-      Bucket: !Ref AudioUploadsBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: transcribe.amazonaws.com
-            Action: 
-              - s3:GetObject
-            Resource: !Sub '${AudioUploadsBucket.Arn}/*'
+      CodeUri: start/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Environment:
+        Variables:
+          STT_WORKFLOW_ARN: !ImportValue TranscriptionWorkflowArn
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !ImportValue TranscriptionWorkflowArn
 
-  TranscriptionOutputBucketPolicy:
-    Type: AWS::S3::BucketPolicy
+  StartLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
     Properties:
-      Bucket: !Ref TranscriptionOutputBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: transcribe.amazonaws.com
-            Action: 
-              - s3:PutObject
-            Resource: !Sub '${TranscriptionOutputBucket.Arn}/*'
-            
-  PythonLayer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-      LayerName: jarvis-stt-python-layer
-      Description: Python dependencies for STT Process Lambdas
-      ContentUri: layer/
-      CompatibleRuntimes:
-        - python3.9
-    Metadata:
-      BuildMethod: makefile
+      FunctionName: !GetAtt StartLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !GetAtt AudioUploadsBucket.Arn
 
   DataLambda:
     Type: AWS::Serverless::Function
@@ -68,12 +76,6 @@ Resources:
       CodeUri: data/
       Handler: app.lambda_handler
       Runtime: python3.9
-      Events:
-        AudioUploadEvent:
-          Type: S3
-          Properties:
-            Bucket: !Ref AudioUploadsBucket
-            Events: s3:ObjectCreated:*
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref AudioUploadsBucket
@@ -87,11 +89,17 @@ Resources:
       Handler: app.lambda_handler
       Runtime: python3.9
       Policies:
-        - TranscribeFullAccess
         - S3ReadPolicy:
             BucketName: !Ref AudioUploadsBucket
         - S3WritePolicy:
             BucketName: !Ref TranscriptionOutputBucket
+        - Statement:
+            - Effect: Allow
+              Action:
+                - transcribe:StartTranscriptionJob
+                - transcribe:GetTranscriptionJob
+                - transcribe:DeleteTranscriptionJob
+              Resource: "*"
       Layers:
         - !Ref PythonLayer
 
@@ -119,36 +127,34 @@ Resources:
       Layers:
         - !Ref PythonLayer
 
-  TranscriptionWorkflow:
-    Type: AWS::Serverless::StateMachine
+  DataLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
     Properties:
-      DefinitionUri: statemachine/stt_workflow.asl.json
-      Policies:
-        - LambdaInvokePolicy:
-            FunctionName: !Ref DataLambda
-        - LambdaInvokePolicy:
-            FunctionName: !Ref TranscribeLambda
-        - LambdaInvokePolicy:
-            FunctionName: !Ref EnhanceLambda
-        - LambdaInvokePolicy:
-            FunctionName: !Ref StoreLambda
-
-  AudioUploadsBucket:
-    Type: AWS::S3::Bucket
-
-  TranscriptionOutputBucket:
-    Type: AWS::S3::Bucket
-
-Parameters:
-  OpenAIApiKey:
-    Type: String
-    NoEcho: true
-    Description: API Key for OpenAI
+      FunctionName: !GetAtt DataLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !GetAtt AudioUploadsBucket.Arn
 
 Outputs:
-  WorkflowArn:
-    Description: "ARN of the Step Functions State Machine"
-    Value: !Ref TranscriptionWorkflow
+  DataLambdaArn:
+    Value: !GetAtt DataLambda.Arn
+    Export:
+      Name: DataLambdaArn
+
+  TranscribeLambdaArn:
+    Value: !GetAtt TranscribeLambda.Arn
+    Export:
+      Name: TranscribeLambdaArn
+
+  EnhanceLambdaArn:
+    Value: !GetAtt EnhanceLambda.Arn
+    Export:
+      Name: EnhanceLambdaArn
+
+  StoreLambdaArn:
+    Value: !GetAtt StoreLambda.Arn
+    Export:
+      Name: StoreLambdaArn
 
   AudioUploadsBucketName:
     Description: "Audio Uploads S3 Bucket Name"
@@ -157,6 +163,3 @@ Outputs:
   TranscriptionOutputBucketName:
     Description: "Transcription Outputs S3 Bucket Name"
     Value: !Ref TranscriptionOutputBucket
-
-Metadata:
-  BuildMethod: makefile
