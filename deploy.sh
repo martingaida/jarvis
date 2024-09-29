@@ -108,9 +108,9 @@ deploy_frontend() {
     fi
 }
 
-deploy_microservices() {
-    echo "Deploying microservices..."
-    cd microservices
+deploy_stt() {
+    echo "Deploying STT Process..."
+    cd stt-process
 
     # Check for .env file and source it if it exists
     if [ -f .env ]; then
@@ -118,19 +118,24 @@ deploy_microservices() {
         export $(grep -v '^#' .env | xargs)
     fi
 
+    # Build the layer
+    build_python_layer
+
+    # Initiate build
     sam build
+    
     if [ $? -ne 0 ]; then
         echo "Error: SAM build failed"
         exit 1
     fi
     
-    # Check if OPENAI_API_KEY is set and add it to parameter overrides if it exists
+    # Deploy with or without OPENAI_API_KEY
     if [ -n "$OPENAI_API_KEY" ]; then
         echo "Using OPENAI_API_KEY from .env file"
-        sam deploy --stack-name metis-microservices --capabilities CAPABILITY_IAM --region us-east-1 --no-confirm-changeset --parameter-overrides OpenAIApiKey=$OPENAI_API_KEY
+        sam deploy --stack-name metis-stt-process --capabilities CAPABILITY_IAM --region us-east-1 --no-confirm-changeset --parameter-overrides OpenAIApiKey=$OPENAI_API_KEY
     else
         echo "OPENAI_API_KEY not found in .env file. Deployment may fail."
-        sam deploy --stack-name metis-microservices --capabilities CAPABILITY_IAM --region us-east-1 --no-confirm-changeset
+        sam deploy --stack-name metis-stt-process --capabilities CAPABILITY_IAM --region us-east-1 --no-confirm-changeset
     fi
 
     if [ $? -ne 0 ]; then
@@ -139,10 +144,26 @@ deploy_microservices() {
     fi
 
     cd ..
-    MICROSERVICE_URL=$(aws cloudformation describe-stacks --stack-name metis-microservices --query "Stacks[0].Outputs[?OutputKey=='LLMFunctionUrl'].OutputValue" --output text)
-    echo "Microservices LLM Function URL: $MICROSERVICE_URL"
-    echo "Microservices deployment completed successfully"
+    
+    AUDIO_UPLOADS_BUCKET=$(aws cloudformation describe-stacks --stack-name metis-stt-process --query "Stacks[0].Outputs[?OutputKey=='AudioUploadsBucketName'].OutputValue" --output text)
+    TRANSCRIPTION_OUTPUT_BUCKET=$(aws cloudformation describe-stacks --stack-name metis-stt-process --query "Stacks[0].Outputs[?OutputKey=='TranscriptionOutputBucketName'].OutputValue" --output text)
+    STT_PROCESS_URL=$(aws cloudformation describe-stacks --stack-name metis-stt-process --query "Stacks[0].Outputs[?OutputKey=='STTProcessUrl'].OutputValue" --output text)
+    
+    echo "STT Process URL: $STT_PROCESS_URL"
+    echo "Audio Uploads Bucket: $AUDIO_UPLOADS_BUCKET"
+    echo "Transcription Output Bucket: $TRANSCRIPTION_OUTPUT_BUCKET"
+    echo "STT Process deployment completed successfully"
+
 }
+
+build_python_layer() {
+    echo "Building Python layer..."
+    chmod +x build-layer.sh
+    ./build-layer.sh
+}
+
+# Fail-safe
+set -eo pipefail
 
 # Check and install dependencies
 check_dependencies
@@ -151,12 +172,12 @@ check_aws_credentials
 # Check command line argument
 if [ "$1" = "frontend" ]; then
     deploy_frontend
-elif [ "$1" = "microservices" ]; then
-    deploy_microservices
+elif [ "$1" = "stt-process" ]; then
+    deploy_stt
 elif [ "$1" = "all" ]; then
-    deploy_microservices
     deploy_frontend
+    deploy_stt
 else
-    echo "Usage: ./deploy.sh [frontend|microservices|all]"
+    echo "Usage: ./deploy.sh [frontend|stt|all]"
     exit 1
 fi

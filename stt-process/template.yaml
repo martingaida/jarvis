@@ -1,0 +1,162 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Legal Audio STT Workflow
+
+Resources:
+  AudioUploadsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-audio-uploads'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  TranscriptionOutputBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-transcription-outputs'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  AudioUploadsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AudioUploadsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: transcribe.amazonaws.com
+            Action: 
+              - s3:GetObject
+            Resource: !Sub '${AudioUploadsBucket.Arn}/*'
+
+  TranscriptionOutputBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TranscriptionOutputBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: transcribe.amazonaws.com
+            Action: 
+              - s3:PutObject
+            Resource: !Sub '${TranscriptionOutputBucket.Arn}/*'
+            
+  PythonLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: jarvis-stt-python-layer
+      Description: Python dependencies for STT Process Lambdas
+      ContentUri: layer/
+      CompatibleRuntimes:
+        - python3.9
+    Metadata:
+      BuildMethod: makefile
+
+  DataLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: data/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Events:
+        AudioUploadEvent:
+          Type: S3
+          Properties:
+            Bucket: !Ref AudioUploadsBucket
+            Events: s3:ObjectCreated:*
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref AudioUploadsBucket
+      Layers:
+        - !Ref PythonLayer
+
+  TranscribeLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: transcribe/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Policies:
+        - TranscribeFullAccess
+        - S3ReadPolicy:
+            BucketName: !Ref AudioUploadsBucket
+        - S3WritePolicy:
+            BucketName: !Ref TranscriptionOutputBucket
+      Layers:
+        - !Ref PythonLayer
+
+  EnhanceLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: enhance/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Environment:
+        Variables:
+          OPENAI_API_KEY: !Ref OpenAIApiKey
+      Layers:
+        - !Ref PythonLayer
+
+  StoreLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: store/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref TranscriptionOutputBucket
+      Layers:
+        - !Ref PythonLayer
+
+  TranscriptionWorkflow:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionUri: statemachine/stt_workflow.asl.json
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref DataLambda
+        - LambdaInvokePolicy:
+            FunctionName: !Ref TranscribeLambda
+        - LambdaInvokePolicy:
+            FunctionName: !Ref EnhanceLambda
+        - LambdaInvokePolicy:
+            FunctionName: !Ref StoreLambda
+
+  AudioUploadsBucket:
+    Type: AWS::S3::Bucket
+
+  TranscriptionOutputBucket:
+    Type: AWS::S3::Bucket
+
+Parameters:
+  OpenAIApiKey:
+    Type: String
+    NoEcho: true
+    Description: API Key for OpenAI
+
+Outputs:
+  WorkflowArn:
+    Description: "ARN of the Step Functions State Machine"
+    Value: !Ref TranscriptionWorkflow
+
+  AudioUploadsBucketName:
+    Description: "Audio Uploads S3 Bucket Name"
+    Value: !Ref AudioUploadsBucket
+
+  TranscriptionOutputBucketName:
+    Description: "Transcription Outputs S3 Bucket Name"
+    Value: !Ref TranscriptionOutputBucket
+
+Metadata:
+  BuildMethod: makefile
