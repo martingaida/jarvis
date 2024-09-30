@@ -12,6 +12,11 @@ Parameters:
   StoreLambdaArn:
     Type: String
 
+Globals:
+  Function:
+    Timeout: 900
+    Runtime: python3.9
+
 Resources:
   TranscriptionWorkflowRole:
     Type: AWS::IAM::Role

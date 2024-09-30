@@ -8,6 +8,11 @@ Parameters:
     NoEcho: true
     Description: API Key for OpenAI integration
 
+Globals:
+  Function:
+    Timeout: 900
+    Runtime: python3.9
+
 Resources:
   PythonLayer:
     Type: AWS::Serverless::LayerVersion
@@ -36,6 +41,23 @@ Resources:
           - Event: s3:ObjectCreated:*
             Function: !GetAtt StartLambda.Arn
 
+  AudioUploadsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties: 
+      Bucket: !Ref AudioUploadsBucket
+      PolicyDocument: 
+        Version: '2012-10-17'
+        Statement: 
+          - Effect: Allow
+            Principal:
+              Service: transcribe.amazonaws.com
+            Action: 
+              - s3:GetObject
+              - s3:ListBucket
+            Resource: 
+              - !Sub "arn:aws:s3:::${AudioUploadsBucket}"
+              - !Sub "arn:aws:s3:::${AudioUploadsBucket}/*"
+
   TranscriptionOutputBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -45,6 +67,34 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+
+  TranscriptionOutputBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-transcription-outputs'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  TranscriptionOutputBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TranscriptionOutputBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: transcribe.amazonaws.com
+            Action:
+              - "s3:PutObject"
+              - "s3:GetObject"
+              - "s3:ListBucket"
+            Resource:
+              - !Sub "arn:aws:s3:::${TranscriptionOutputBucket}"
+              - !Sub "arn:aws:s3:::${TranscriptionOutputBucket}/*"
 
   StartLambda:
     Type: AWS::Serverless::Function
@@ -90,9 +140,9 @@ Resources:
       Runtime: python3.9
       Policies:
         - S3ReadPolicy:
-            BucketName: !Ref AudioUploadsBucket
-        - S3WritePolicy:
             BucketName: !Ref TranscriptionOutputBucket
+        - S3ReadPolicy:
+            BucketName: !Ref AudioUploadsBucket
         - Statement:
             - Effect: Allow
               Action:
@@ -100,6 +150,16 @@ Resources:
                 - transcribe:GetTranscriptionJob
                 - transcribe:DeleteTranscriptionJob
               Resource: "*"
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+                - s3:ListBucket
+              Resource:
+                - !Sub "arn:aws:s3:::${AudioUploadsBucket}"
+                - !Sub "arn:aws:s3:::${AudioUploadsBucket}/*"
+                - !Sub "arn:aws:s3:::${TranscriptionOutputBucket}"
+                - !Sub "arn:aws:s3:::${TranscriptionOutputBucket}/*"
       Layers:
         - !Ref PythonLayer
 
