@@ -1,11 +1,13 @@
-import { Component, ViewChild, ElementRef, OnInit } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { trigger, transition, style, animate } from '@angular/animations';
+import { environment } from '../../environments/environment';
 import { CommonModule } from '@angular/common';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { FormsModule } from '@angular/forms';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { ApiService } from '../services/api.service';
 
 @Component({
   selector: 'app-stt',
@@ -27,11 +29,20 @@ export class SttComponent implements OnInit {
   form: FormGroup;
   isLoading = false;
   response: any;
+  videoUrl: SafeResourceUrl;
+  isFileValid = false;
 
-  constructor(private http: HttpClient, private fb: FormBuilder) {
+  constructor(
+    private apiService: ApiService,
+    private fb: FormBuilder,
+    private sanitizer: DomSanitizer
+  ) {
     this.form = this.fb.group({
       audioFile: [null],
     });
+    const videoId = this.extractVideoId(environment.mockDepositionUrl!);
+    const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+    this.videoUrl = this.sanitizer.bypassSecurityTrustResourceUrl(embedUrl);
   }
 
   ngOnInit() {}
@@ -43,14 +54,25 @@ export class SttComponent implements OnInit {
   onFileChange(event: Event) {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
-      this.form.get('audioFile')?.setValue(input.files[0]);
+      const file = input.files[0];
+      const isValidType = file.type.startsWith('audio/');
+      const isValidSize = file.size <= 10 * 1024 * 1024; // 10MB
+
+      if (isValidType && isValidSize) {
+        this.form.get('audioFile')?.setValue(file);
+        this.isFileValid = true;
+      } else {
+        this.form.get('audioFile')?.setValue(null);
+        this.isFileValid = false;
+        alert('Invalid file. Please upload an audio file no larger than 10MB.');
+      }
     }
   }
 
   transcribe() {
     this.isLoading = true;
     if (this.mode === 'Sample') {
-      this.http.get('/api/sample-transcribe').subscribe(
+      this.apiService.transcribeSample().subscribe(
         (res) => {
           this.response = res;
           this.isLoading = false;
@@ -61,11 +83,9 @@ export class SttComponent implements OnInit {
         }
       );
     } else {
-      const formData = new FormData();
       const audioFile = this.form.get('audioFile')?.value;
       if (audioFile) {
-        formData.append('file', audioFile);
-        this.http.post('/api/upload-transcribe', formData).subscribe(
+        this.apiService.uploadAndTranscribe(audioFile).subscribe(
           (res) => {
             this.response = res;
             this.isLoading = false;
@@ -76,8 +96,13 @@ export class SttComponent implements OnInit {
           }
         );
       } else {
-        // Handle the case where audioFile is null
+        this.isLoading = false;
       }
     }
+  }
+
+  private extractVideoId(url: string): string {
+    const videoIdMatch = url.match(/(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([^&]+)/);
+    return videoIdMatch ? videoIdMatch[1] : '';
   }
 }

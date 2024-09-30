@@ -1,12 +1,8 @@
 from openai import OpenAI, OpenAIError
 from urllib.parse import urlparse
-from dotenv import load_dotenv
-from pydantic import BaseModel
-from typing import List, Dict
 import boto3
 import json
 import os
-import math
 
 # Initialize OpenAI API key from environment variable
 s3 = boto3.client('s3')
@@ -14,21 +10,7 @@ s3 = boto3.client('s3')
 # Set up OpenAI client
 client = OpenAI()
 
-class Entity(BaseModel):
-    type: str
-    value: str
-
-class Segment(BaseModel):
-    timestamp: str
-    speaker: str
-    text: str
-
-class EnhancedTranscript(BaseModel):
-    transcript: str
-    segments: List[Segment]
-    entities: Dict[str, List[str]]
-
-MAX_TOKENS = 50000  # Define a limit to keep the token count well below the GPT model limit
+MAX_TOKENS = 15000  # Define a limit to keep the token count well below the GPT model limit
 
 def lambda_handler(event, context):
     try:
@@ -42,27 +24,49 @@ def lambda_handler(event, context):
         transcript_obj = s3.get_object(Bucket=bucket, Key=key)
         transcript = json.loads(transcript_obj['Body'].read().decode('utf-8'))
         
-        # Split the transcript into smaller chunks
+        # Split the transcript into smaller chunks if necessary
         transcript_chunks = split_transcript_into_batches(transcript, MAX_TOKENS)
 
-        # Process each chunk using GPT-4 Turbo
-        enhanced_chunks = [enhance_with_openai(chunk) for chunk in transcript_chunks]
+        # Process each chunk using GPT-4 Turbo for enhancing the segments
+        enhanced_chunks = []
+        for chunk in transcript_chunks:
+            enhanced_chunk = enhance_with_openai(chunk)
+            if enhanced_chunk:
+                enhanced_chunks.append(enhanced_chunk)
+            else:
+                print(f"Warning: enhance_with_openai returned None for chunk: {chunk}")
         
-        # Combine the processed chunks into a single enhanced transcript
-        enhanced_transcript = combine_enhanced_chunks(enhanced_chunks)
+        if not enhanced_chunks:
+            return {
+                'statusCode': 500,
+                'body': json.dumps({'error': 'No valid enhanced chunks were returned'})
+            }
         
-        # Convert the Pydantic model to a dict to make it JSON serializable
+        # Combine the processed chunks into a single transcript
+        combined_transcript = combine_enhanced_chunks(enhanced_chunks)
+
+        # Perform NER on the entire combined transcript
+        enhanced_transcript_with_ner = perform_ner_on_transcript(combined_transcript)
+        
+        if not enhanced_transcript_with_ner:
+            return {
+                'statusCode': 500,
+                'body': json.dumps({'error': 'NER process failed'})
+            }
+        
+        enhanced_transcript_with_ner['s3'] = {
+            'transcriptionOutputBucket': bucket, 
+            'transcriptionJobName': key
+        }
+
         return {
             'statusCode': 200,
-            'body': json.dumps(enhanced_transcript.dict())  # Use .dict() to make it JSON serializable
+            'body': json.dumps(enhanced_transcript_with_ner)  # Return JSON serializable output
         }
     
     except Exception as e:
-        print(f"Error: {e}")
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
-        }
+        raise
+    
 
 def split_transcript_into_batches(transcript, max_tokens):
     """
@@ -99,6 +103,7 @@ def split_transcript_into_batches(transcript, max_tokens):
 
     return chunks
 
+
 def get_text_for_segment(segment, transcript_items):
     """
     Get the transcript text corresponding to a given speaker segment.
@@ -114,6 +119,7 @@ def get_text_for_segment(segment, transcript_items):
 
     return " ".join(segment_text)
 
+
 def enhance_with_openai(transcript_chunk):
     """
     Enhances a chunk of the transcript using GPT-4 Turbo.
@@ -128,7 +134,66 @@ def enhance_with_openai(transcript_chunk):
             "speaker": "best guess name or title label of the speaker (if unknown, use 'Speaker X')",
             "text": "The actual speech text from the speaker"
             }}
-        ],
+        ]
+    }}
+    The transcript is:
+    {json.dumps(transcript_chunk)}
+    """
+    
+    try:
+        # Make the API call to OpenAI's GPT-4 Turbo model
+        completion = client.beta.chat.completions.parse(
+            model="gpt-4o-2024-08-06",
+            messages=[
+                {"role": "system", "content": "You are a legal transcription assistant."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=MAX_TOKENS,
+            temperature=0
+        )
+
+        # Add logging to check the raw response
+        print(f"Raw completion response: {completion}")
+
+        # Check if the response content exists
+        if not completion or not completion.choices:
+            print("Warning: OpenAI API returned empty or invalid response.")
+            return None
+
+        # Extract the response text from the first choice and clean it
+        response_text = completion.choices[0].message.content.strip()
+
+        # Log the extracted response text
+        print(f"Extracted response content: {response_text}")
+
+        # Remove backticks and language indicators like ```json
+        if response_text.startswith("```"):
+            response_text = response_text.split("```json")[1].split("```")[0].strip()
+
+        # Parse the cleaned response text as JSON
+        response_json = json.loads(response_text)
+
+        return response_json
+    
+    except OpenAIError as e:
+        print(f"OpenAI API error: {e}")
+        return None
+    except json.JSONDecodeError as e:
+        print(f"JSON parsing error: {e}")
+        return None
+    except (IndexError, ValueError) as e:
+        print(f"Unexpected response structure: {e}")
+        return None
+
+
+def perform_ner_on_transcript(transcript):
+    """
+    Enhances the entire transcript with Named Entity Recognition using GPT-4 Turbo.
+    """
+    prompt = f"""
+    Perform Named Entity Recognition (NER) on the following transcript. Return the transcript with the identified entities categorized into the following categories:
+    {{
+        "transcript": "The entire transcript as a single string.",
         "entities": {{
             "ATTORNEY": ["List of unique attorney names"],
             "PLAINTIFF": ["List of unique plaintiff names"],
@@ -146,9 +211,8 @@ def enhance_with_openai(transcript_chunk):
             "LEGAL_TERM": ["List of unique legal terms or jargon"]
         }}
     }}
-    Identify and categorize important entities such as attorney names, plaintiff names, company names, and case file numbers. Include these entities in the overall entities list, not in individual segments.
     The transcript is:
-    {json.dumps(transcript_chunk)}
+    {transcript['transcript']}
     """
     
     try:
@@ -159,24 +223,47 @@ def enhance_with_openai(transcript_chunk):
                 {"role": "system", "content": "You are a legal transcription assistant."},
                 {"role": "user", "content": prompt}
             ],
-            response_format=EnhancedTranscript,
+            max_tokens=MAX_TOKENS,
+            temperature=0
         )
         
-        # Extract the JSON output from the response
-        response = json.loads(completion.choices[0].message.content)
-        result = EnhancedTranscript(**response)
+        # Add logging to check the raw response
+        print(f"Raw NER completion response: {completion}")
 
-        return result
+        # Check if the response content exists
+        if not completion or not completion.choices:
+            print("Warning: OpenAI API returned empty or invalid response for NER.")
+            return None
+
+        # Extract the response text from the first choice and clean it
+        response_text = completion.choices[0].message.content.strip()
+
+        # Log the extracted response text
+        print(f"Extracted NER response content: {response_text}")
+
+        # Remove backticks and language indicators like ```json
+        if response_text.startswith("```"):
+            response_text = response_text.split("```json")[1].split("```")[0].strip()
+
+        # Parse the cleaned response text as JSON
+        response_json = json.loads(response_text)
+
+        # Add identified entities to the transcript and return it
+        transcript['entities'] = response_json.get('entities', {})
+
+        return transcript
     
     except OpenAIError as e:
-        print(f"OpenAI API error: {e}")
-        raise
+        print(f"OpenAI API error during NER: {e}")
+        return None
     except json.JSONDecodeError as e:
-        print(f"JSON parsing error: {e}")
-        raise
+        print(f"JSON parsing error during NER: {e}")
+        return None
     except (IndexError, ValueError) as e:
-        print(f"Unexpected response structure: {e}")
-        raise
+        print(f"Unexpected response structure during NER: {e}")
+        return None
+
+
 
 def combine_enhanced_chunks(chunks):
     """
@@ -184,31 +271,13 @@ def combine_enhanced_chunks(chunks):
     """
     combined_transcript = ""
     combined_segments = []
-    combined_entities = {
-        "ATTORNEY": set(),
-        "PLAINTIFF": set(),
-        "DEFENDANT": set(),
-        "JUDGE": set(),
-        "WITNESS": set(),
-        "EXPERT": set(),
-        "COMPANY": set(),
-        "CASE_NUMBER": set(),
-        "COURT": set(),
-        "DATE": set(),
-        "LOCATION": set(),
-        "STATUTE": set(),
-        "EXHIBIT": set(),
-        "LEGAL_TERM": set()
-    }
 
     for chunk in chunks:
-        combined_transcript += chunk.transcript + " "
-        combined_segments.extend(chunk.segments)
-        for entity_type, entities in chunk.entities.items():
-            combined_entities[entity_type].update(entities)
+        combined_transcript += chunk['transcript'] + " "  # Combine the transcript text
+        combined_segments.extend(chunk['segments'])       # Merge all segments into one list
 
-    return EnhancedTranscript(
-        transcript=combined_transcript.strip(),
-        segments=combined_segments,
-        entities={k: list(v) for k, v in combined_entities.items()}
-    )
+    # Return the combined transcript with segments, ready for further NER processing
+    return {
+        "transcript": combined_transcript.strip(),  # Remove extra spaces
+        "segments": combined_segments
+    }

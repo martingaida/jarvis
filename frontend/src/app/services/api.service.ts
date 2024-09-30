@@ -1,6 +1,7 @@
-import { Injectable, Inject } from '@angular/core';
-import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 export interface Layer {
   what: string;
@@ -40,10 +41,9 @@ export interface ArXivPaper {
   providedIn: 'root'
 })
 export class ApiService {
-  constructor(
-    private http: HttpClient,
-    @Inject('API_URL') private apiUrl: string
-  ) {}
+  private apiUrl = this.getApiUrl();
+
+  constructor(private http: HttpClient) {}
 
   private getHeaders(): HttpHeaders {
     return new HttpHeaders({
@@ -51,31 +51,33 @@ export class ApiService {
     });
   }
 
-  getArXivPapers(): Observable<ArXivPaper[]> {
-    const body = { action: 'arxiv' };  // Set the action in the body
+  private getApiUrl(): string {
+    return environment.apiUrl || '';
+  }
+
+  transcribeSample(): Observable<any> {
+    const body = { action: 'sample-transcribe' };
 
     console.log('Requesting URL:', this.apiUrl, 'with body:', body);
-    
-    return this.http.post<ArXivPaper[]>(
+
+    return this.http.post<any>(
       this.apiUrl,
-      body,  // Pass the action in the request body
-      { 
-        headers: this.getHeaders(),  // Set headers (if needed)
+      body,
+      {
+        headers: this.getHeaders(),
       }
     );
   }
 
-  explainText(text: string): Observable<ExplanationResponse> {
-    const body = { action: 'explain', text };  // Include both action and text in the body
+  uploadAndTranscribe(file: File): Observable<any> {
+    const formData = new FormData();
+    formData.append('file', file);
 
-    console.log('Requesting URL:', this.apiUrl, 'with body:', body);
-    
-    return this.http.post<ExplanationResponse>(
-      this.apiUrl,
-      body,  // Send action and text in the body
-      { 
-        headers: this.getHeaders(),  // Set headers (if needed)
-      }
+    console.log('Uploading file to URL:', this.apiUrl);
+
+    return this.http.post<any>(
+      `${this.apiUrl}/upload-transcribe`,
+      formData
     );
   }
 }

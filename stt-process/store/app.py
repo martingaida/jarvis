@@ -25,9 +25,9 @@ def lambda_handler(event, context):
         }
 
         # Save to S3
-        output_bucket = event.get('transcriptionOutputBucket')
-        output_key = f"transcription_{event.get('transcriptionJobName')}.json"
-        
+        output_bucket = body.get('s3', {}).get('transcriptionOutputBucket')
+        output_key = f"{body.get('s3', {}).get('transcriptionJobName')}.json"
+
         # Validate bucket and key
         if not output_bucket or not output_key:
             raise KeyError("Missing 'transcriptionOutputBucket' or 'transcriptionJobName' in event data")
@@ -35,7 +35,7 @@ def lambda_handler(event, context):
         s3.put_object(
             Bucket=output_bucket,
             Key=output_key,
-            Body=json.dumps(final_result),
+            Body=json.dumps(body),
             ContentType='application/json'
         )
         
@@ -46,14 +46,8 @@ def lambda_handler(event, context):
     
     except KeyError as e:
         print(f"KeyError: {e}")
-        return {
-            'status': 'error',
-            'message': f"Missing key in event: {e}"
-        }
+        raise
     
     except Exception as e:
         print(f"Error: {e}")
-        return {
-            'status': 'error',
-            'message': str(e)
-        }
+        raise

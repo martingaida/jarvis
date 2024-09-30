@@ -23,7 +23,7 @@ export const appConfig: ApplicationConfig = {
     provideEffects(),
     provideAnimations(),
     provideStoreDevtools({ maxAge: 25 }),
-    { provide: 'API_URL', useValue: environment.apiUrl },
+    { provide: 'S3_UPLOAD', useValue: environment.s3Upload },
     ApiService,
     importProvidersFrom(
       CommonModule,
