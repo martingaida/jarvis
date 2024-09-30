@@ -1,18 +1,29 @@
-import { Component, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup } from '@angular/forms';
+import { Component, ViewChild, ElementRef, OnInit } from '@angular/core';
 import { trigger, transition, style, animate } from '@angular/animations';
-import { environment } from '../../environments/environment';
-import { CommonModule } from '@angular/common';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
-import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { EntitiesComponent } from '../entities/entities.component';
+import { SegmentsComponent } from '../segments/segments.component';
+import { environment } from '../../environments/environment';
+import { FormBuilder, FormGroup } from '@angular/forms';
+import { InfoComponent } from '../info/info.component';
 import { ApiService } from '../services/api.service';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-stt',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatProgressBarModule, MatButtonToggleModule],
+  imports: [
+    CommonModule, 
+    FormsModule, 
+    MatProgressBarModule, 
+    MatButtonToggleModule, 
+    InfoComponent, 
+    EntitiesComponent,
+    SegmentsComponent
+  ],
   templateUrl: './stt.component.html',
   styleUrls: ['./stt.component.scss'],
   animations: [
@@ -28,9 +39,14 @@ export class SttComponent implements OnInit {
   mode: 'Sample' | 'Upload' = 'Sample';
   form: FormGroup;
   isLoading = false;
-  response: any;
+  sampleResponse: any;
+  uploadResponse: any;
   videoUrl: SafeResourceUrl;
   isFileValid = false;
+  documentTitle: any;
+  entities: any;
+  segments: any;
+  uploadedFileName: string = '';
 
   constructor(
     private apiService: ApiService,
@@ -49,6 +65,7 @@ export class SttComponent implements OnInit {
 
   switchMode(mode: 'Sample' | 'Upload') {
     this.mode = mode;
+    this.updateDisplayedResponse();
   }
 
   onFileChange(event: Event) {
@@ -61,9 +78,11 @@ export class SttComponent implements OnInit {
       if (isValidType && isValidSize) {
         this.form.get('audioFile')?.setValue(file);
         this.isFileValid = true;
+        this.uploadedFileName = file.name.split('.').slice(0, -1).join('.'); // Remove file extension
       } else {
         this.form.get('audioFile')?.setValue(null);
         this.isFileValid = false;
+        this.uploadedFileName = '';
         alert('Invalid file. Please upload an audio file no larger than 10MB.');
       }
     }
@@ -74,7 +93,8 @@ export class SttComponent implements OnInit {
     if (this.mode === 'Sample') {
       this.apiService.transcribeSample().subscribe(
         (res) => {
-          this.response = res;
+          this.sampleResponse = res;
+          this.updateDisplayedResponse();
           this.isLoading = false;
         },
         (err) => {
@@ -87,11 +107,12 @@ export class SttComponent implements OnInit {
       if (audioFile) {
         this.apiService.uploadAndTranscribe(audioFile).subscribe(
           (res) => {
-            this.response = res;
+            this.uploadResponse = res;
+            this.updateDisplayedResponse();
             this.isLoading = false;
           },
           (err) => {
-            console.error(err);
+            console.error('Error uploading and transcribing:', err);
             this.isLoading = false;
           }
         );
@@ -99,6 +120,32 @@ export class SttComponent implements OnInit {
         this.isLoading = false;
       }
     }
+  }
+
+  updateDisplayedResponse() {
+    const response = this.mode === 'Sample' ? this.sampleResponse : this.uploadResponse;
+    if (response) {
+      this.processResponse(response);
+    } else {
+      this.clearDisplayedResponse();
+    }
+  }
+
+  processResponse(response: any) {
+    this.documentTitle = {
+      caseNumber: response.entities.CASE_NUMBER[0],
+      date: response.entities.DATE[0],
+      plaintiffs: response.entities.PLAINTIFF,
+      defendants: response.entities.DEFENDANT
+    };
+    this.entities = response.entities;
+    this.segments = response.segments;
+  }
+
+  clearDisplayedResponse() {
+    this.documentTitle = null;
+    this.entities = null;
+    this.segments = null;
   }
 
   private extractVideoId(url: string): string {

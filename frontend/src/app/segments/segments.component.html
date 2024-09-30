@@ -1,0 +1,10 @@
+<h2 class="transcript-title">Transcript</h2>
+<div class="segments-container">
+  <ng-container *ngFor="let segment of segments; last as isLast">
+    <div class="segment-row">
+      <div class="timestamp">{{ formatTimestamp(segment.timestamp) }}</div>
+      <div class="speaker">{{ segment.speaker }}</div>
+      <div class="text">{{ segment.text }}</div>
+    </div>
+  </ng-container>
+</div>

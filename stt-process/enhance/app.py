@@ -131,7 +131,7 @@ def enhance_with_openai(transcript_chunk):
         "segments": [
             {{
             "timestamp": "timestamp for when the speaker starts talking",
-            "speaker": "best guess name or title label of the speaker (if unknown, use 'Speaker X')",
+            "speaker": "best guess name or title label of the speaker otherwise use the original label",
             "text": "The actual speech text from the speaker"
             }}
         ]

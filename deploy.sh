@@ -191,6 +191,42 @@ deploy_statemachine() {
     cd ../..
 }
 
+deploy_microservices() {
+    echo "Deploying microservices..."
+    cd microservices
+
+    # Check for .env file and source it if it exists
+    if [ -f .env ]; then
+        echo "Found .env file. Loading environment variables..."
+        export $(grep -v '^#' .env | xargs)
+    fi
+
+    sam build
+    if [ $? -ne 0 ]; then
+        echo "Error: SAM build failed"
+        exit 1
+    fi
+    
+    # Check if AWS ACCESS KEYS are set and add them to parameter overrides
+    if [ -n "$AWS_KEY_ID" ] && [ -n "$AWS_KEY_SECRET" ]; then
+        echo "Using AWS credentials from .env file"
+        sam deploy --stack-name jarvis-microservices --capabilities CAPABILITY_IAM --region us-east-1 --no-confirm-changeset --parameter-overrides AwsAccessKeyId=$AWS_KEY_ID AwsSecretAccessKey=$AWS_KEY_SECRET
+    else
+        echo "AWS credentials not found in .env file. Deployment may fail."
+        sam deploy --stack-name jarvis-microservices --capabilities CAPABILITY_IAM --region us-east-1 --no-confirm-changeset
+    fi
+
+    if [ $? -ne 0 ]; then
+        echo "Error: SAM deploy failed"
+        exit 1
+    fi
+
+    cd ..
+    MICROSERVICE_URL=$(aws cloudformation describe-stacks --stack-name jarvis-microservices --query "Stacks[0].Outputs[?OutputKey=='LLMFunctionUrl'].OutputValue" --output text)
+    echo "Microservices Lambda URL: $MICROSERVICE_URL"
+    echo "Microservices deployment completed successfully"
+}
+
 cleanup_python_layer() {
     echo "Cleaning up Python layer zip file..."
     rm -f python.zip
@@ -210,14 +246,18 @@ elif [ "$1" == "stt-process" ]; then
     deploy_stt
 elif [ "$1" == "statemachine" ]; then
     deploy_statemachine
+elif [ "$1" = "microservices" ]; then
+    deploy_microservices
 elif [ "$1" == "all" ]; then
     deploy_frontend
     deploy_statemachine
+    deploy_microservices
     deploy_stt
 else
     echo "Invalid command. Please use one of the following arguments:"
-    echo "  frontend     - Deploy the frontend"
-    echo "  stt-process  - Deploy the STT process"
-    echo "  statemachine - Deploy the state machine"
-    echo "  all          - Deploy everything"
+    echo "  frontend      - Deploy the frontend"
+    echo "  stt-process   - Deploy the STT process"
+    echo "  statemachine  - Deploy the state machine"
+    echo "  microservices - Deploy the microservices"
+    echo "  all           - Deploy everything"
 fi

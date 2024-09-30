@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Metis Microservices
+
+Globals:
+  Function:
+    Timeout: 900
+    Runtime: python3.9
+
+Resources:
+  STTHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: stt-handler/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          PYTHONPATH: ./
+          AWS_KEY_ID: !Ref AwsAccessKeyId
+          AWS_KEY_SECRET: !Ref AwsSecretAccessKey
+    Metadata:
+      BuildMethod: python3.9
+
+  STTHandlerFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !Ref STTHandlerFunction
+      AuthType: NONE
+      Cors:
+        AllowCredentials: false
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - POST
+        AllowHeaders:
+          - Content-Type
+
+  STTHandlerFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref STTHandlerFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'
+      FunctionUrlAuthType: NONE
+
+Parameters:
+  AwsAccessKeyId:
+    Type: String
+    Description: AWS Access Key ID
+    NoEcho: true
+  AwsSecretAccessKey:
+    Type: String
+    Description: AWS Secret Key
+    NoEcho: true
+
+Outputs:
+  STTHandlerFunctionUrl:
+    Description: "STT Handler Function URL"
+    Value: !GetAtt STTHandlerFunctionUrl.FunctionUrl

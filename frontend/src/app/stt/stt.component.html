@@ -1,7 +1,7 @@
 <div class="container">
   <div class="stt-wrapper">
     <!-- Mode toggle -->
-    <mat-button-toggle-group [(ngModel)]="mode" [hideSingleSelectionIndicator]="true" class="mode-toggle rounded-toggle" [disabled]="isLoading">
+    <mat-button-toggle-group [(ngModel)]="mode" [hideSingleSelectionIndicator]="true" class="mode-toggle rounded-toggle" [disabled]="isLoading" (change)="switchMode($event.value)">
       <mat-button-toggle value="Sample" checked>Sample</mat-button-toggle>
       <mat-button-toggle value="Upload">Upload</mat-button-toggle>
     </mat-button-toggle-group>
@@ -24,9 +24,10 @@
       <mat-progress-bar *ngIf="isLoading" mode="indeterminate" class="mb-3"></mat-progress-bar>
     </ng-container>
     <!-- Transcription Result -->
-    <div *ngIf="response" class="explanation-container" [class.visible]="true">
-      <h2>Transcription Result</h2>
-      <pre>{{ response | json }}</pre>
+    <div *ngIf="documentTitle" class="transcription-result" [class.visible]="true">
+      <app-info [title]="documentTitle"></app-info>
+      <app-entities [entities]="entities"></app-entities>
+      <app-segments [segments]="segments"></app-segments>
     </div>
   </div>
 </div>

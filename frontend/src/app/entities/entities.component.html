@@ -1,0 +1,10 @@
+<div class="entities-container">
+  <div *ngFor="let entity of entityList" class="entity-row">
+    <h5 class="entity-title">{{ entity.key }}</h5>
+    <mat-chip-listbox>
+      <mat-chip-option *ngFor="let value of entity.values" [style.background-color]="entity.color">
+        {{ value }}
+      </mat-chip-option>
+    </mat-chip-listbox>
+  </div>
+</div>

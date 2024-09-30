@@ -30,7 +30,7 @@ Resources:
   AudioUploadsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-audio-uploads'
+      BucketName: !Sub '${AWS::StackName}-audio-uploads-hsj45y23i'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -61,23 +61,13 @@ Resources:
   TranscriptionOutputBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-transcription-outputs'
+      BucketName: !Sub '${AWS::StackName}-transcription-outputs-65rfgc3n9'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-
-  TranscriptionOutputBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${AWS::StackName}-transcription-outputs'
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
+      
   TranscriptionOutputBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:

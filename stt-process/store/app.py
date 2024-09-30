@@ -26,7 +26,7 @@ def lambda_handler(event, context):
 
         # Save to S3
         output_bucket = body.get('s3', {}).get('transcriptionOutputBucket')
-        output_key = f"{body.get('s3', {}).get('transcriptionJobName')}.json"
+        output_key = body.get('s3', {}).get('transcriptionJobName')
 
         # Validate bucket and key
         if not output_bucket or not output_key:
@@ -41,7 +41,7 @@ def lambda_handler(event, context):
         
         return {
             'status': 'success',
-            'outputLocation': f"s3://{output_bucket}/{output_key}"
+            'outputLocation': f"s3://{output_bucket}/{output_key.replace('.json', '_enhanced.json')}"
         }
     
     except KeyError as e:

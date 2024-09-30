@@ -102,7 +102,7 @@
     padding: 10px 20px;
     font-weight: bold;
     font-size: 1.3rem;
-    margin: 2rem 0;
+    margin: 3rem 0 2rem 0;
 }
 
 .custom-btn-arxiv {
@@ -302,6 +302,18 @@ mat-card-content {
 
     &:hover {
         background-color: #e0e0e0;
+    }
+}
+
+.transcription-result {
+    margin-top: 2rem;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 300ms ease-out, transform 300ms ease-out;
+  
+    &.visible {
+      opacity: 1;
+      transform: translateY(0);
     }
 }
 
