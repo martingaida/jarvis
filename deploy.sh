@@ -149,7 +149,7 @@ deploy_stt() {
     fi
     
     # Cleanup the Python layer zip file after deployment
-    cleanup_python_layer
+    # cleanup_python_layer
 
     cd ..
     

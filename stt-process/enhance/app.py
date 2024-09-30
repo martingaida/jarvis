@@ -10,10 +10,6 @@ import os
 # Initialize OpenAI API key from environment variable
 s3 = boto3.client('s3')
 
-# Load the .env file from the parent directory
-root_dir = Path(__file__).resolve().parent.parent.parent
-load_dotenv(dotenv_path=root_dir / ".env")
-
 # Set up Open AI client
 client = OpenAI()
 
@@ -80,7 +76,7 @@ def enhance_with_openai(transcript):
         # Extract the JSON output from the response
         response = json.loads(completion.choices[0].message.content)
         result = EnhancedTranscript(**response)
-        
+
         return result
     
     except OpenAIError as e:

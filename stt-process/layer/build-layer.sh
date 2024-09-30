@@ -24,7 +24,7 @@ find "$LAYER_DIR" -type d -name "*.egg-info" -exec rm -rf {} +
 zip -r9 python.zip "$LAYER_DIR"
 
 # Clean up
-rm -rf "$LAYER_DIR"
+# rm -rf "$LAYER_DIR"
 
 echo "Layer created at $(pwd)/python.zip"
 echo "Contents of current directory after build:"
