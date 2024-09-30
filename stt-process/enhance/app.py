@@ -2,16 +2,21 @@ from openai import OpenAI, OpenAIError
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 from pydantic import BaseModel
-from typing import List
+from typing import List, Dict
 import boto3
 import json
 import os
+import math
 
 # Initialize OpenAI API key from environment variable
 s3 = boto3.client('s3')
 
-# Set up Open AI client
+# Set up OpenAI client
 client = OpenAI()
+
+class Entity(BaseModel):
+    type: str
+    value: str
 
 class Segment(BaseModel):
     timestamp: str
@@ -21,45 +26,129 @@ class Segment(BaseModel):
 class EnhancedTranscript(BaseModel):
     transcript: str
     segments: List[Segment]
+    entities: Dict[str, List[str]]
 
+MAX_TOKENS = 50000  # Define a limit to keep the token count well below the GPT model limit
 
 def lambda_handler(event, context):
     try:
-        # Parse S3 URI to get the transcript
-        transcript_bucket, transcript_key = parse_s3_uri(event['transcriptS3Uri'])
+        # Log the incoming event
+        print(f"Received event: {json.dumps(event)}")
         
+        # Parse S3 URI to get the transcript
+        bucket, key = event['bucket'], event['key']
+                
         # Fetch the transcript file from S3
-        transcript_obj = s3.get_object(Bucket=transcript_bucket, Key=transcript_key)
+        transcript_obj = s3.get_object(Bucket=bucket, Key=key)
         transcript = json.loads(transcript_obj['Body'].read().decode('utf-8'))
         
-        # Enhance the transcript using GPT-4 Turbo
-        enhanced_transcript = enhance_with_openai(transcript)
+        # Split the transcript into smaller chunks
+        transcript_chunks = split_transcript_into_batches(transcript, MAX_TOKENS)
+
+        # Process each chunk using GPT-4 Turbo
+        enhanced_chunks = [enhance_with_openai(chunk) for chunk in transcript_chunks]
         
-        return enhanced_transcript
+        # Combine the processed chunks into a single enhanced transcript
+        enhanced_transcript = combine_enhanced_chunks(enhanced_chunks)
+        
+        # Convert the Pydantic model to a dict to make it JSON serializable
+        return {
+            'statusCode': 200,
+            'body': json.dumps(enhanced_transcript.dict())  # Use .dict() to make it JSON serializable
+        }
     
     except Exception as e:
+        print(f"Error: {e}")
         return {
             'statusCode': 500,
             'body': json.dumps({'error': str(e)})
         }
 
+def split_transcript_into_batches(transcript, max_tokens):
+    """
+    Splits the transcript into smaller chunks based on the max token limit.
+    """
+    segments = transcript['results']['speaker_labels']['segments']
+    transcript_items = transcript['results']['items']
+    chunks = []
+    current_chunk = []
+    current_token_count = 0
+    
+    for segment in segments:
+        # Calculate segment token count using an approximation (word count)
+        segment_text = get_text_for_segment(segment, transcript_items)
+        segment_token_count = len(segment_text.split())
+        
+        if current_token_count + segment_token_count > max_tokens:
+            # If adding this segment exceeds the token limit, start a new chunk
+            chunks.append(current_chunk)
+            current_chunk = []
+            current_token_count = 0
+        
+        # Add the segment to the current chunk
+        current_chunk.append({
+            'timestamp': segment['start_time'],
+            'speaker': segment['speaker_label'],
+            'text': segment_text
+        })
+        current_token_count += segment_token_count
+    
+    # Add the last chunk if it's not empty
+    if current_chunk:
+        chunks.append(current_chunk)
 
-def enhance_with_openai(transcript):
-    # Prepare the prompt for GPT-4 Turbo to format the transcript as required
+    return chunks
+
+def get_text_for_segment(segment, transcript_items):
+    """
+    Get the transcript text corresponding to a given speaker segment.
+    """
+    segment_text = []
+    start_time = float(segment['start_time'])
+    end_time = float(segment['end_time'])
+
+    for item in transcript_items:
+        if 'start_time' in item and start_time <= float(item['start_time']) <= end_time:
+            if item['type'] == 'pronunciation' or item['type'] == 'punctuation':
+                segment_text.append(item['alternatives'][0]['content'])
+
+    return " ".join(segment_text)
+
+def enhance_with_openai(transcript_chunk):
+    """
+    Enhances a chunk of the transcript using GPT-4 Turbo.
+    """
     prompt = f"""
     You are a legal transcription assistant. Format the following transcript into a JSON object with the following structure:
     {{
-      "transcript": "The entire transcript as a single string.",
-      "segments": [
-        {{
-          "timestamp": "timestamp for when the speaker starts talking",
-          "speaker": "name or label of the speaker (if unknown, use 'Speaker X')",
-          "text": "The actual speech text from the speaker"
+        "transcript": "The entire transcript as a single string.",
+        "segments": [
+            {{
+            "timestamp": "timestamp for when the speaker starts talking",
+            "speaker": "best guess name or title label of the speaker (if unknown, use 'Speaker X')",
+            "text": "The actual speech text from the speaker"
+            }}
+        ],
+        "entities": {{
+            "ATTORNEY": ["List of unique attorney names"],
+            "PLAINTIFF": ["List of unique plaintiff names"],
+            "DEFENDANT": ["List of unique defendant names"],
+            "JUDGE": ["List of unique judge names"],
+            "WITNESS": ["List of unique witness names"],
+            "EXPERT": ["List of unique expert witness names"],
+            "COMPANY": ["List of unique company names"],
+            "CASE_NUMBER": ["List of unique case numbers"],
+            "COURT": ["List of unique court names"],
+            "DATE": ["List of unique relevant dates"],
+            "LOCATION": ["List of unique relevant locations"],
+            "STATUTE": ["List of unique statute references"],
+            "EXHIBIT": ["List of unique exhibit references"],
+            "LEGAL_TERM": ["List of unique legal terms or jargon"]
         }}
-      ]
     }}
+    Identify and categorize important entities such as attorney names, plaintiff names, company names, and case file numbers. Include these entities in the overall entities list, not in individual segments.
     The transcript is:
-    {json.dumps(transcript)}
+    {json.dumps(transcript_chunk)}
     """
     
     try:
@@ -89,10 +178,37 @@ def enhance_with_openai(transcript):
         print(f"Unexpected response structure: {e}")
         raise
 
-def parse_s3_uri(s3_uri):
-    """Parses an S3 URI to extract the bucket and key."""
-    parsed_url = urlparse(s3_uri)
-    path_parts = parsed_url.path.lstrip('/').split('/', 1)
-    bucket = path_parts[0]
-    key = path_parts[1] if len(path_parts) > 1 else ''
-    return bucket, key
+def combine_enhanced_chunks(chunks):
+    """
+    Combines multiple chunks of enhanced transcripts into a single enhanced transcript.
+    """
+    combined_transcript = ""
+    combined_segments = []
+    combined_entities = {
+        "ATTORNEY": set(),
+        "PLAINTIFF": set(),
+        "DEFENDANT": set(),
+        "JUDGE": set(),
+        "WITNESS": set(),
+        "EXPERT": set(),
+        "COMPANY": set(),
+        "CASE_NUMBER": set(),
+        "COURT": set(),
+        "DATE": set(),
+        "LOCATION": set(),
+        "STATUTE": set(),
+        "EXHIBIT": set(),
+        "LEGAL_TERM": set()
+    }
+
+    for chunk in chunks:
+        combined_transcript += chunk.transcript + " "
+        combined_segments.extend(chunk.segments)
+        for entity_type, entities in chunk.entities.items():
+            combined_entities[entity_type].update(entities)
+
+    return EnhancedTranscript(
+        transcript=combined_transcript.strip(),
+        segments=combined_segments,
+        entities={k: list(v) for k, v in combined_entities.items()}
+    )

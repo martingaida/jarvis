@@ -79,12 +79,13 @@ def lambda_handler(event, context):
             if status == 'COMPLETED':
                 # Generate the S3 key for the transcript
                 output_bucket = 'ja-stt-transcription-outputs'
-                output_key = f"transcripts/{job_name}.json"
+                output_key = f"{job_name}.json"
                 
                 return {
                     'transcriptionJobName': job_name,
                     'transcriptionJobStatus': status,
-                    'transcriptS3Uri': f"s3://{output_bucket}/{output_key}"
+                    'bucket': output_bucket,
+                    'key': output_key
                 }
             else:
                 return {

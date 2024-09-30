@@ -172,6 +172,20 @@ Resources:
       Environment:
         Variables:
           OPENAI_API_KEY: !Ref OpenAIApiKey
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref TranscriptionOutputBucket
+        - S3WritePolicy:
+            BucketName: !Ref TranscriptionOutputBucket
+        - Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:ListBucket
+            Resource:
+              - !Sub "arn:aws:s3:::${TranscriptionOutputBucket}"
+              - !Sub "arn:aws:s3:::${TranscriptionOutputBucket}/*"
       Layers:
         - !Ref PythonLayer
 
@@ -182,8 +196,19 @@ Resources:
       Handler: app.lambda_handler
       Runtime: python3.9
       Policies:
-        - S3CrudPolicy:
+        - S3ReadPolicy:
             BucketName: !Ref TranscriptionOutputBucket
+        - S3WritePolicy:
+            BucketName: !Ref TranscriptionOutputBucket
+        - Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:ListBucket
+            Resource:
+              - !Sub "arn:aws:s3:::${TranscriptionOutputBucket}"
+              - !Sub "arn:aws:s3:::${TranscriptionOutputBucket}/*"
       Layers:
         - !Ref PythonLayer
 

@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
-import { ExplainComponent } from './explain/explain.component';
+import { SttComponent } from './stt/stt.component';
 
 export const routes: Routes = [
-  { path: '', component: ExplainComponent },
+  { path: '', component: SttComponent },
 ];

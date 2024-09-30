@@ -1,0 +1,30 @@
+<div class="container">
+  <div class="stt-wrapper">
+    <!-- Mode toggle -->
+    <mat-button-toggle-group [(ngModel)]="mode" [hideSingleSelectionIndicator]="true" class="mode-toggle rounded-toggle" [disabled]="isLoading">
+      <mat-button-toggle value="Sample">Sample</mat-button-toggle>
+      <mat-button-toggle value="Upload">Upload</mat-button-toggle>
+    </mat-button-toggle-group>
+    <!-- Sample mode -->
+    <ng-container *ngIf="mode === 'Sample'">
+      <iframe width="560" height="315" src="https://www.youtube.com/embed/sample_video_id" frameborder="0" allowfullscreen></iframe>
+      <button class="custom-btn" (click)="transcribe()" [disabled]="isLoading">
+        {{ isLoading ? 'Loading...' : 'Transcribe' }}
+      </button>
+      <mat-progress-bar *ngIf="isLoading" mode="indeterminate" class="mb-3"></mat-progress-bar>
+    </ng-container>
+    <!-- Upload mode -->
+    <ng-container *ngIf="mode === 'Upload'">
+      <input type="file" (change)="onFileChange($event)">
+      <button class="custom-btn" (click)="transcribe()" [disabled]="isLoading">
+        {{ isLoading ? 'Loading...' : 'Transcribe' }}
+      </button>
+      <mat-progress-bar *ngIf="isLoading" mode="indeterminate" class="mb-3"></mat-progress-bar>
+    </ng-container>
+    <!-- Transcription Result -->
+    <div *ngIf="response" class="explanation-container" [class.visible]="true">
+      <h2>Transcription Result</h2>
+      <pre>{{ response | json }}</pre>
+    </div>
+  </div>
+</div>
