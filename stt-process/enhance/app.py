@@ -12,14 +12,20 @@ client = OpenAI()
 
 MAX_TOKENS = 15000  # Define a limit to keep the token count well below the GPT model limit
 
+
 def lambda_handler(event, context):
     try:
         # Log the incoming event
         print(f"Received event: {json.dumps(event)}")
         
         # Parse S3 URI to get the transcript
-        bucket, key = event['bucket'], event['key']
-                
+        bucket = event['bucket']
+        key = event['key']
+        
+        # Handle case where bucket is a list
+        if isinstance(bucket, list):
+            bucket = bucket[0]  # Take the first element if it's a list
+        
         # Fetch the transcript file from S3
         transcript_obj = s3.get_object(Bucket=bucket, Key=key)
         transcript = json.loads(transcript_obj['Body'].read().decode('utf-8'))
@@ -65,7 +71,8 @@ def lambda_handler(event, context):
         }
     
     except Exception as e:
-        raise
+        print(f"Error in lambda_handler: {str(e)}")
+        raise e
     
 
 def split_transcript_into_batches(transcript, max_tokens):

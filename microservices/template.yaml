@@ -16,8 +16,35 @@ Resources:
       Environment:
         Variables:
           PYTHONPATH: ./
-          AWS_KEY_ID: !Ref AwsAccessKeyId
-          AWS_KEY_SECRET: !Ref AwsSecretAccessKey
+          AUDIO_UPLOADS_BUCKET: !Ref AudioUploadsBucket
+          TRANSCRIPTION_OUTPUT_BUCKET: !Ref TranscriptionOutputBucket
+          STT_WORKFLOW_ARN: !Ref STTWorkflowArn
+      Policies:
+        - StepFunctionsExecutionPolicy:
+            StateMachineName: !Ref STTWorkflowArn
+        - S3WritePolicy:
+            BucketName: !Ref AudioUploadsBucket
+        - S3ReadPolicy:
+            BucketName: !Ref TranscriptionOutputBucket
+        - Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:ListBucket
+            Resource:
+              - !Sub "arn:aws:s3:::${AudioUploadsBucket}"
+              - !Sub "arn:aws:s3:::${AudioUploadsBucket}/*"
+              - !Sub "arn:aws:s3:::${TranscriptionOutputBucket}"
+              - !Sub "arn:aws:s3:::${TranscriptionOutputBucket}/*"
+        - Statement:
+          - Effect: Allow
+            Action:
+              - transcribe:GetTranscriptionJob
+              - transcribe:ListTranscriptionJobs
+              - transcribe:StartTranscriptionJob
+              - transcribe:DeleteTranscriptionJob
+            Resource: "*"
     Metadata:
       BuildMethod: python3.9
 
@@ -31,6 +58,7 @@ Resources:
         AllowOrigins:
           - '*'
         AllowMethods:
+          - GET
           - POST
         AllowHeaders:
           - Content-Type
@@ -44,14 +72,15 @@ Resources:
       FunctionUrlAuthType: NONE
 
 Parameters:
-  AwsAccessKeyId:
+  AudioUploadsBucket:
     Type: String
-    Description: AWS Access Key ID
-    NoEcho: true
-  AwsSecretAccessKey:
+    Description: Name of the S3 bucket for audio uploads
+  TranscriptionOutputBucket:
     Type: String
-    Description: AWS Secret Key
-    NoEcho: true
+    Description: Name of the S3 bucket for transcription outputs
+  STTWorkflowArn:
+    Type: String
+    Description: ARN of the STT Workflow State Machine
 
 Outputs:
   STTHandlerFunctionUrl:

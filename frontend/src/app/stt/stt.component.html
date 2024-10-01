@@ -7,22 +7,26 @@
     </mat-button-toggle-group>
     <!-- Sample mode -->
     <ng-container *ngIf="mode === 'Sample'">
-      <iframe width="560" height="315" [src]="videoUrl" frameborder="0" allowfullscreen></iframe>
-      <button class="custom-btn" (click)="transcribe()" [disabled]="isLoading">
-        {{ isLoading ? 'Loading...' : 'Transcribe' }}
-      </button>
-      <mat-progress-bar *ngIf="isLoading" mode="indeterminate" class="mb-3"></mat-progress-bar>
+      <div class="video-container">
+        <iframe width="100%" [src]="videoUrl" frameborder="0" allowfullscreen></iframe>
+      </div>
     </ng-container>
     <!-- Upload mode -->
     <ng-container *ngIf="mode === 'Upload'">
       <div class="upload-container">
         <input type="file" (change)="onFileChange($event)" accept="audio/*">
       </div>
-      <button class="custom-btn" (click)="transcribe()" [disabled]="isLoading || !isFileValid">
-        {{ isLoading ? 'Loading...' : 'Transcribe' }}
-      </button>
-      <mat-progress-bar *ngIf="isLoading" mode="indeterminate" class="mb-3"></mat-progress-bar>
+      <p class="warning">
+        * Warning: Connection is not encrypted. Do not upload any sensitive information.
+      </p>
+      <p *ngIf="uploadedFileName"><span class="bold">Selected file: </span>{{ uploadedFileName }}</p>
     </ng-container>
+    <!-- Common Transcribe button -->
+    <button *ngIf="!isLoading" class="custom-btn" (click)="transcribe()" [disabled]="isLoading || (mode === 'Upload' && !isFileValid)">
+      {{ isLoading ? (mode === 'Sample' ? 'Loading...' : 'Transcribing...') : 'Transcribe' }}
+    </button>
+    <button *ngIf="isLoading" class="custom-btn" [disabled]="isLoading">{{ buttonText }}</button>
+    <mat-progress-bar *ngIf="isLoading" mode="indeterminate" class="mb-3"></mat-progress-bar>
     <!-- Transcription Result -->
     <div *ngIf="documentTitle" class="transcription-result" [class.visible]="true">
       <app-info [title]="documentTitle"></app-info>

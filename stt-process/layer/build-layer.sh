@@ -1,10 +1,6 @@
 #!/bin/bash
 set -eo pipefail
 
-echo "Current directory: $(pwd)"
-echo "Contents of current directory:"
-ls -l
-
 # Create a temporary directory for the layer
 LAYER_DIR="python"
 
@@ -28,4 +24,3 @@ zip -r9 python.zip "$LAYER_DIR"
 
 echo "Layer created at $(pwd)/python.zip"
 echo "Contents of current directory after build:"
-ls -l

@@ -130,10 +130,11 @@ deploy_stt() {
     STT_WORKFLOW_ARN=$(aws cloudformation describe-stacks --stack-name ja-stt-statemachine --query "Stacks[0].Outputs[?OutputKey=='TranscriptionWorkflowArn'].OutputValue" --output text)
     
     # Deploy with or without OPENAI_API_KEY
-    if [ -n "$OPENAI_API_KEY" ]; then
-        echo "Using OPENAI_API_KEY from .env file"
+    if [ -n "$OPENAI_API_KEY" ] && [ -n "$S3_TRANSCRIPTION_OUTPUT" ]; then
+        echo "Using OPENAI_API_KEY and S3_TRANSCRIPTION_OUTPUT from .env file"
         sam deploy --stack-name ja-stt --capabilities CAPABILITY_IAM --region us-east-1 --no-confirm-changeset \
             --parameter-overrides \
+            ParameterKey=S3TranscriptionOutput,ParameterValue=$S3_TRANSCRIPTION_OUTPUT \
             ParameterKey=OpenAIApiKey,ParameterValue=$OPENAI_API_KEY \
             ParameterKey=StateMachineArn,ParameterValue=$STT_WORKFLOW_ARN
     else
@@ -154,12 +155,10 @@ deploy_stt() {
     cd ..
     
     AUDIO_UPLOADS_BUCKET=$(aws cloudformation describe-stacks --stack-name ja-stt --query "Stacks[0].Outputs[?OutputKey=='AudioUploadsBucketName'].OutputValue" --output text)
-    TRANSCRIPTION_OUTPUT_BUCKET=$(aws cloudformation describe-stacks --stack-name ja-stt --query "Stacks[0].Outputs[?OutputKey=='TranscriptionOutputBucketName'].OutputValue" --output text)
     STT_PROCESS_URL=$(aws cloudformation describe-stacks --stack-name ja-stt --query "Stacks[0].Outputs[?OutputKey=='STTProcessUrl'].OutputValue" --output text)
     
     echo "STT Process URL: $STT_PROCESS_URL"
     echo "Audio Uploads Bucket: $AUDIO_UPLOADS_BUCKET"
-    echo "Transcription Output Bucket: $TRANSCRIPTION_OUTPUT_BUCKET"
     echo "STT Process deployment completed successfully"
 }
 
@@ -206,23 +205,37 @@ deploy_microservices() {
         echo "Error: SAM build failed"
         exit 1
     fi
-    
-    # Check if AWS ACCESS KEYS are set and add them to parameter overrides
-    if [ -n "$AWS_KEY_ID" ] && [ -n "$AWS_KEY_SECRET" ]; then
-        echo "Using AWS credentials from .env file"
-        sam deploy --stack-name jarvis-microservices --capabilities CAPABILITY_IAM --region us-east-1 --no-confirm-changeset --parameter-overrides AwsAccessKeyId=$AWS_KEY_ID AwsSecretAccessKey=$AWS_KEY_SECRET
+
+    # Load variables from .env file
+    if [ -f .env ]; then
+        export $(grep -v '^#' .env | xargs)
     else
-        echo "AWS credentials not found in .env file. Deployment may fail."
-        sam deploy --stack-name jarvis-microservices --capabilities CAPABILITY_IAM --region us-east-1 --no-confirm-changeset
+        echo "Error: .env file not found."
+        exit 1
     fi
 
+    # Check if we have all the necessary parameters
+    if [ -z "$AUDIO_UPLOADS_BUCKET" ] || [ -z "$TRANSCRIPTION_OUTPUT_BUCKET" ] || [ -z "$STT_WORKFLOW_ARN" ]; then
+        echo "Error: Missing required parameters in .env file. Please ensure AUDIO_UPLOADS_BUCKET, TRANSCRIPTION_OUTPUT_BUCKET, and STT_WORKFLOW_ARN are set."
+        exit 1
+    fi
+    
+    # Deploy with parameter overrides
+    sam deploy --stack-name ja-stt-microservices \
+               --capabilities CAPABILITY_IAM \
+               --region us-east-1 \
+               --no-confirm-changeset \
+               --parameter-overrides \
+                   ParameterKey=AudioUploadsBucket,ParameterValue=${AUDIO_UPLOADS_BUCKET} \
+                   ParameterKey=TranscriptionOutputBucket,ParameterValue=${TRANSCRIPTION_OUTPUT_BUCKET} \
+                   ParameterKey=STTWorkflowArn,ParameterValue=${STT_WORKFLOW_ARN}
     if [ $? -ne 0 ]; then
         echo "Error: SAM deploy failed"
         exit 1
     fi
 
     cd ..
-    MICROSERVICE_URL=$(aws cloudformation describe-stacks --stack-name jarvis-microservices --query "Stacks[0].Outputs[?OutputKey=='LLMFunctionUrl'].OutputValue" --output text)
+    MICROSERVICE_URL=$(aws cloudformation describe-stacks --stack-name ja-stt-microservices --query "Stacks[0].Outputs[?OutputKey=='LLMFunctionUrl'].OutputValue" --output text)
     echo "Microservices Lambda URL: $MICROSERVICE_URL"
     echo "Microservices deployment completed successfully"
 }

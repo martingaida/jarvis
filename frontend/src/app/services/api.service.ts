@@ -1,50 +1,63 @@
-import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
+import sampleTranscript from './sample_transcript.json';
+import { Injectable } from '@angular/core';
+import { delay } from 'rxjs/operators';
+import { Observable, of } from 'rxjs';
+import { map } from 'rxjs/operators';
+
 
 @Injectable({
   providedIn: 'root'
 })
 export class ApiService {
-  private apiUrl = environment.API_URL;
+  private apiUrl = environment.apiUrl;
+  private s3Upload = environment.s3Upload;
+  private s3Transcript = environment.s3Transcript;
 
   constructor(private http: HttpClient) {}
 
   transcribeSample(): Observable<any> {
-    return new Observable(observer => {
-      setTimeout(() => {
-        observer.next(this.mockTranscriptResponse);
-        observer.complete();
-      }, 2000);
-    });
+    return of(sampleTranscript).pipe();
   }
 
-  uploadAudio(file: File): Observable<any> {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    return this.http.post(`${this.apiUrl}/upload`, formData);
-  }
-
-  private async sendFileToLambda(file: File): Promise<any> {
-    const arrayBuffer = await file.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-
-    const payload = {
-      filename: file.name,
-      contentType: file.type,
-      content: base64
-    };
-
+  uploadFile(file: File): Observable<any> {
     const headers = new HttpHeaders({
-      'Content-Type': 'application/json'
+      'Content-Type': file.type
     });
 
-    return this.http.post(this.lambdaUrl!, payload, { headers }).toPromise();
+    const uploadUrl = `https://${this.s3Upload}.s3.us-east-1.amazonaws.com/${file.name}`;
+    return this.http.put(uploadUrl, file, { headers });
   }
 
   checkTranscriptionStatus(fileName: string): Observable<any> {
-    return this.http.get(`${this.apiUrl}/status/${fileName}`);
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    });
+
+    return this.http
+      .get(`${this.apiUrl}?fileName=${encodeURIComponent(fileName)}`, { headers })
+      .pipe(
+        map((response: any) => {
+          if (response) {
+            if (typeof response === 'string') {
+              const parsedResponse = JSON.parse(response);
+              return parsedResponse.result;
+            } else if (typeof response === 'object') {
+              return response.result;
+            }
+          } else if (response.body) {
+            return response.body.result;
+          }
+          console.log(response);
+          throw new Error('Invalid response format');
+        })
+      );
+  }
+
+  getTranscript(fileName: string): Observable<any> {
+    const transcriptUrl = `https://${this.s3Transcript}.s3.us-east-1.amazonaws.com/${fileName}`;
+    return this.http.get(transcriptUrl);
   }
 }

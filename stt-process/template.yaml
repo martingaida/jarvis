@@ -7,6 +7,9 @@ Parameters:
     Type: String
     NoEcho: true
     Description: API Key for OpenAI integration
+  S3TranscriptionOutput:
+    Type: String
+    Description: Transcription output S3 name
 
 Globals:
   Function:
@@ -128,6 +131,9 @@ Resources:
       CodeUri: transcribe/
       Handler: app.lambda_handler
       Runtime: python3.9
+      Environment:
+        Variables:
+          S3_TRANSCRIPTION_OUTPUT: !Ref S3TranscriptionOutput
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref TranscriptionOutputBucket
