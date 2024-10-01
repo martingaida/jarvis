@@ -337,6 +337,12 @@ mat-card-content {
     transform: translate(-50%, -50%);
 }
 
+.transcript-container {
+    /* Ensure the container has a defined height and overflow */
+    max-height: 80vh; /* Adjust as needed */
+    overflow-y: auto;
+}
+
 @keyframes indeterminate-primary {
     0% {
         transform: translateX(-145.166611%);

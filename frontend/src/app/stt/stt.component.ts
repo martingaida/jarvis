@@ -1,5 +1,5 @@
 import { Component, ViewChild, ElementRef, OnInit, OnDestroy } from '@angular/core';
-import { trigger, transition, style, animate } from '@angular/animations';
+import { trigger, state, style, transition, animate } from '@angular/animations';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -33,6 +33,12 @@ import { switchMap, takeWhile } from 'rxjs/operators';
       transition(':enter', [
         style({ opacity: 0, transform: 'translateY(10px)' }),
         animate('300ms ease-out', style({ opacity: 1, transform: 'translateY(0)' }))
+      ])
+    ]),
+    trigger('slideInOut', [
+      state('void', style({ transform: 'translateY(100%)', opacity: 0 })),
+      transition(':enter', [
+        animate('300ms ease-out', style({ transform: 'translateY(0)', opacity: 1 }))
       ])
     ])
   ]
@@ -173,6 +179,7 @@ export class SttComponent implements OnInit, OnDestroy {
     };
     this.entities = response.entities;
     this.segments = response.segments;
+    this.scrollTranscriptIntoView();
   }
 
   clearDisplayedResponse() {
@@ -233,11 +240,11 @@ export class SttComponent implements OnInit, OnDestroy {
             clearInterval(messageInterval); // Stop changing messages
             return;
           }
-  
+
           // Increment attempt count and schedule the next status check
           attempts++;
           if (this.isLoading) {
-            setTimeout(checkStatus, 15000); // Poll again in 15 seconds
+            setTimeout(checkStatus, 20000); // Poll again in 15 seconds
           }
         },
         (error) => {
@@ -249,14 +256,35 @@ export class SttComponent implements OnInit, OnDestroy {
         }
       );
     };
-  
-    checkStatus(); // Start the first status check
+
+    checkStatus();
   }
-  
 
   ngOnDestroy() {
     if (this.statusCheckSubscription) {
       this.statusCheckSubscription.unsubscribe();
     }
+  }
+
+  @ViewChild('transcriptContainer') transcriptContainer!: ElementRef;
+
+  scrollTranscriptIntoView() {
+    setTimeout(() => {
+      if (this.transcriptContainer) {
+        this.transcriptContainer.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  }
+
+  setTranscriptData(data: any) {
+    this.documentTitle = {
+      caseNumber: data.entities.CASE_NUMBER[0],
+      date: data.entities.DATE[0],
+      plaintiffs: data.entities.PLAINTIFF,
+      defendants: data.entities.DEFENDANT
+    };
+    this.entities = data.entities;
+    this.segments = data.segments;
+    this.scrollTranscriptIntoView();
   }
 }

@@ -16,7 +16,7 @@
       <div class="upload-container">
         <input type="file" (change)="onFileChange($event)" accept="audio/*">
       </div>
-      <p class="warning">
+      <p *ngIf="!uploadedFileName" class="warning">
         * Warning: Connection is not encrypted. Do not upload any sensitive information.
       </p>
       <p *ngIf="uploadedFileName"><span class="bold">Selected file: </span>{{ uploadedFileName }}</p>
@@ -28,10 +28,12 @@
     <button *ngIf="isLoading" class="custom-btn" [disabled]="isLoading">{{ buttonText }}</button>
     <mat-progress-bar *ngIf="isLoading" mode="indeterminate" class="mb-3"></mat-progress-bar>
     <!-- Transcription Result -->
-    <div *ngIf="documentTitle" class="transcription-result" [class.visible]="true">
-      <app-info [title]="documentTitle"></app-info>
-      <app-entities [entities]="entities"></app-entities>
-      <app-segments [segments]="segments"></app-segments>
+    <div #transcriptContainer class="transcript-container" [@slideInOut] *ngIf="documentTitle">
+      <div *ngIf="documentTitle" class="transcription-result" [class.visible]="true">
+        <app-info [title]="documentTitle"></app-info>
+        <app-entities [entities]="entities"></app-entities>
+        <app-segments [segments]="segments"></app-segments>
+      </div>
     </div>
   </div>
 </div>
