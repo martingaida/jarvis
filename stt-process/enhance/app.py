@@ -129,7 +129,7 @@ def get_text_for_segment(segment, transcript_items):
 
 def enhance_with_openai(transcript_chunk):
     """
-    Enhances a chunk of the transcript using GPT-4 Turbo.
+    Enhances a chunk of the transcript using GPT-4o.
     """
     prompt = f"""
     You are a legal transcription assistant. Format the following transcript into a JSON object with the following structure:

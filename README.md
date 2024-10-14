@@ -13,7 +13,7 @@ Jarvis is a comprehensive Legal Speech-To-Text (STT) solution designed to transc
 - Uses AWS Transcribe for speech-to-text conversion.
 
 ### AI-Powered Post-Processing
-- OpenAI GPT-4 Turbo integration for intelligent analysis of transcripts.
+- OpenAI GPT-4o integration for intelligent analysis of transcripts.
 - Extracts key legal entities and concepts from transcripts.
 
 ### Real-time Status Updates
@@ -67,7 +67,7 @@ Jarvis is a comprehensive Legal Speech-To-Text (STT) solution designed to transc
 
 ## Legal Audio STT Workflow Overview
 
-This system processes legal audio files by transcribing them, enhancing the transcripts using OpenAI GPT-4 Turbo, and storing the results in Amazon S3. It leverages a serverless AWS infrastructure, including multiple Lambda functions, S3 buckets, and AWS Transcribe.
+This system processes legal audio files by transcribing them, enhancing the transcripts using OpenAI GPT-4o, and storing the results in Amazon S3. It leverages a serverless AWS infrastructure, including multiple Lambda functions, S3 buckets, and AWS Transcribe.
 
 ### Key AWS Resources
 - **S3 Buckets**:
