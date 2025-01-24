@@ -2,7 +2,6 @@
 
 Jarvis is a comprehensive Legal Speech-To-Text (STT) solution designed to transcribe and analyze legal audio recordings. It leverages cutting-edge technologies like AWS and OpenAI to provide accurate transcriptions with enhanced features tailored for legal professionals.
 
-Live http://jarvis-frontend-9yu456yti.s3-website-us-east-1.amazonaws.com/
 Try it out: [ http://jarvis-frontend-9yu456yti.s3-website-us-east-1.amazonaws.com/]( http://jarvis-frontend-9yu456yti.s3-website-us-east-1.amazonaws.com/)
 
 ## Features
